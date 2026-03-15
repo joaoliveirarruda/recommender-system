@@ -43,10 +43,32 @@ int main() {
     while (fscanf(arquivo, " %*[^,],%49[^,],%49[^,],%49[^\n]",
                 codClient,
                 codProduto,
-                nomeProduto) == 3) {
-                    printf("COD_CLIENTE: %-10s | COD_PRODUTO: %s | NOME_PRODUTO: %s\n",
-                        codClient, codProduto, nomeProduto);
+                nomeProduto) == 3) {    
+                    string cliente = codClient;
+                    string produto = codProduto;
+                    string nome = nomeProduto;
+                    
+                    int cliente_idx;
+                    if (compras.posicaoCodigoCliente.find(cliente) !=
+                    compras.posicaoCodigoCliente.end()) {
+                        cliente_idx = compras.posicaoCodigoCliente[cliente];
+                    } else{
+                        cliente_idx = compras.posicaoCodigoCliente[cliente];
+                        compras.codigosClientes.push_back(cliente);
+                        compras.posicaoCodigoCliente[cliente] = cliente_idx;
+                        compras.comprasPorCliente.push_back(vector<int>());
+                    }
 
+                    int produto_idx;
+                    if (compras.posicaoCodigoProduto.find(produto) != compras.posicaoCodigoProduto.end()) {
+                    produto_idx = compras.posicaoCodigoProduto[produto];
+                    }  else {
+                    produto_idx = compras.nomesProdutos.size();
+                    compras.nomesProdutos.push_back(nome);
+                    compras.posicaoCodigoProduto[produto] = produto_idx;
+                    }
+                    
+                    compras.comprasPorCliente[cliente_idx].push_back(produto_idx);
     }
     fclose(arquivo);
 
