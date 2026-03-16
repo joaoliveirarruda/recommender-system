@@ -8,31 +8,31 @@ O diagrama a seguir detalha o fluxo de execução do sistema, desde a leitura do
 
 ```mermaid
 flowchart TD
-    A[main.cpp: Início do Programa] --> B[carregarCompras]
+    A["main.cpp: Início do Programa"] --> B[carregarCompras]
     B --> C{Arquivo Lido?}
-    C -- Sim --> D[Extrai Dados para 'ListaCompras']
+    C -- Sim --> D["Extrai Dados para 'ListaCompras'"]
     C -- Não --> E[Fim do Programa]
-    
+
     D --> F[Solicita IDs de 3 Clientes]
     F --> G[exibirProdutosDoCliente]
     G --> H[calcularSimilaridade]
-    
-    subgraph similaridade.cpp [Cálculos Matriciais (Similaridade)]
+
+    subgraph sim_cpp ["similaridade.cpp — Cálculos Matriciais (Similaridade)"]
         H --> I[construirMatrizDensa]
         I --> J[calcularTransposta]
         J --> K[matrixAlloc]
         K --> L[matrixMult]
-        L --> M[Liberar Memória (A e AT)]
+        L --> M["Liberar Memória (A e AT)"]
     end
-    
-    M --> N[Retorna Matriz de Interseção I]
-    N --> O[calcularJaccard]
-    
-    subgraph Jaccard
-        O --> P[Calcula 1.0 - I/Total]
+
+    M --> N[Retorna Matriz de Interseção]
+
+    subgraph jaccard ["Jaccard"]
+        N --> O[calcularJaccard]
+        O --> P["Calcula 1.0 - I/Total"]
     end
-    
-    P --> Q[Imprime a Similaridade de Jaccard 3x3]
+
+    P --> Q["Imprime Similaridade de Jaccard 3x3"]
     Q --> R[matrixFree e matrixFreeDouble]
     R --> S[Fim do Programa]
 ```
@@ -48,7 +48,9 @@ Abaixo encontra-se o detalhamento minucioso de toda a estrutura e funções, abo
 Este módulo é encarregado de extrair as informações base do `.csv` efetuando processamento primitivo das strings e indexação na memória.
 
 #### struct `ListaCompras`
+
 Uma estrutura que consolida toda a base lida:
+
 - **`clientesCodigoBase`**: `std::vector<std::string>` - Armazena os códigos originais em formato de `string` pela ordem inserida. O índice da inserção representa dinamicamente o seu ID de cliente (inteiro).
 - **`clienteIndiceInterno`**: `std::map<std::string, int>` - Relacionamento tipo chave-valor convertendo o código Original String do CSV na ID numérica do cliente no sistema.
 - **`produtosNomeDescritivo`**: `std::vector<std::string>` - Mesmo princípio do vetor acima, porém para os nomes literais dos produtos; índice do vetor virando seu respectivo identificador ID numérico interno.
@@ -56,7 +58,9 @@ Uma estrutura que consolida toda a base lida:
 - **`historicoComprasPorCliente`**: `std::vector<std::vector<int>>` - Matriz condensada que armazena os IDs dos produtos por IDs dos clientes.
 
 #### Função: `carregarCompras`
+
 A primeira função do fluxo do programa a ser invocada.
+
 - **Assinatura**: `ListaCompras carregarCompras(const char *caminhoArquivo)`
 - **Parâmetros**:
   - `caminhoArquivo`: (`const char *`) Ponteiro para o endereço de memória de caracteres constantes (strings estilo C). **Por que ser ponteiro?** É passado como ponteiro em substituição a `std::string` para acoplar nativamente sua variável ao método primitivo de leitura C-like `fopen(caminhoArquivo)`. Como é `const`, se assegura que esta string referida não poderá sofrer escritas colaterais da manipulação acidental durante a extração de metadados.
@@ -69,13 +73,15 @@ A primeira função do fluxo do programa a ser invocada.
 Realiza conversões algébricas de estruturas aglomeradas do objeto `ListaCompras` em matrizes bidimensionais puras nativas em C via Heap da memória RAM, sem orientação a objeto extra, providenciando as bibliotecas vitais `<stdio.h>` e `<stdlib.h>`.
 
 #### Funções: `matrixAlloc` / `matrixAllocDouble`
+
 - **Assinatura**: `int** matrixAlloc(int linhas, int colunas)` / `double** matrixAllocDouble(...)`
 - **Operação Principal**: Usando `malloc` combinada de repetição preenchedora e `calloc` com zeros absolutos geram as matrizes no bloco heap dinâmico da memória.
 - **Parâmetros**:
   - `linhas` e `colunas`: (`int`) - **Tipo primário int repassado por valor.** São meramente cópias quantitativas pequenas iterativas de metainformação de laços temporários (for). Escritas acidentais nas variáveis ali dentro não prejudicam as matrizes principais do `main`.
-- **Retorno**: (`int**` / `double**`) - Ponteiro referenciando para um outro ponteiro interno (`**`). **Por que isso ocorre?** Arrays multidimensionais em C que não têm seus tamanhos de "linhas" e "colunas" declarados em escopo e tempo de compilação precisam ser dinâmicos. `int**` significa que a variável central guarda endereços de memórias num *array mestre de ponteiros* onde cada endereço local dessa linha apontará para novo array contendo os "Inteiros" da tal coluna na lateral. 
+- **Retorno**: (`int**` / `double**`) - Ponteiro referenciando para um outro ponteiro interno (`**`). **Por que isso ocorre?** Arrays multidimensionais em C que não têm seus tamanhos de "linhas" e "colunas" declarados em escopo e tempo de compilação precisam ser dinâmicos. `int**` significa que a variável central guarda endereços de memórias num *array mestre de ponteiros* onde cada endereço local dessa linha apontará para novo array contendo os "Inteiros" da tal coluna na lateral.
 
 #### Funções: `matrixFree` / `matrixFreeDouble`
+
 - **Assinatura**: `void matrixFree(int **matriz, int linhas)`
 - **Operação Principal**: Função essencial para blindar a perda de memória e vazamento (Leak).
 - **Parâmetros**:
@@ -83,6 +89,7 @@ Realiza conversões algébricas de estruturas aglomeradas do objeto `ListaCompra
   - `linhas`: (`int`) - Cópia repassada (por valor) de laço primário.
 
 #### Função: `construirMatrizDensa`
+
 - **Assinatura**: `int** construirMatrizDensa(ListaCompras *compras, int nClientes, int nProdutos)`
 - **Operação Principal**: Gera matriz pura iterada da struct para calcular $A_{m \times n}$.
 - **Parâmetros**:
@@ -91,6 +98,7 @@ Realiza conversões algébricas de estruturas aglomeradas do objeto `ListaCompra
 - **Retorno**: (`int**`) Ponteiro matricial instanciado da Matriz $A$.
 
 #### Função: `calcularTransposta`
+
 - **Assinatura**: `int** calcularTransposta(int **A, int nClientes, int nProdutos)`
 - **Parâmetros**:
   - `A`: (`int**`) Referencia na memória a versão da matriz pura $A$ original; a ser inspecionada (não clonada).
@@ -98,6 +106,7 @@ Realiza conversões algébricas de estruturas aglomeradas do objeto `ListaCompra
 - **Retorno**: (`int**`) Cria submatriz alocando na heap uma nova e limpa da qual se guarda $A^T$.
 
 #### Função: `matrixMult`
+
 - **Assinatura**: `void matrixMult(int **A, int **AT, int **I, int nClientes, int nProdutos)`
 - **Operação Principal**: Pela algebra subscrita: $I = A \times A^T$.
 - **Parâmetros**:
@@ -105,14 +114,16 @@ Realiza conversões algébricas de estruturas aglomeradas do objeto `ListaCompra
   - Parametrizadores dimensionados escaláveis `int`.
 
 #### Função: `calcularSimilaridade`
+
 - **Assinatura**: `int** calcularSimilaridade(ListaCompras *compras, int *nClientes_out)`
-- **Operação Principal**: A "Maestrina" que orquestra tudo isso de transpostas em modo limpo (gerando-as já as limpando localmente com matrixFree para poupar o main). 
+- **Operação Principal**: A "Maestrina" que orquestra tudo isso de transpostas em modo limpo (gerando-as já as limpando localmente com matrixFree para poupar o main).
 - **Parâmetros**:
   - `compras`: (`ListaCompras *`) Novamente por ponteiro por otimização extrema a estrutura macro do projeto.
   - `nClientes_out`: (`int *`) Ponteiro do Tipo Numérico Base. **Por que um ponteiro de int?** Sabendo que a função só permite um tipo único de return oficial (e a Matrix já usurpa esse espaço retornado como `int**`), é obrigatório o Main descobrir quantos laços terá que iterar mais tarde para apagar esse lixo inteiro; então forçadamente ele envia o ENDEREÇO NUMÉRICO de si mesmo `&nCliente_Out`, de forma que quando esta função de `Similaridade` atualiza a variável através do espaço subreferenciado que pertence a Main nativamente, escrevendo local permanentemente.
 - **Retorno**: (`int**`) Matriz de Interseção já fechada e desanexada I.
 
 #### Função: `calcularJaccard`
+
 - **Assinatura**: `double** calcularJaccard(int **I, int nClientes)`
 - **Parâmetros**:
   - `I`: (`int**`) Referência direta do ponteiro da matriz de matemática básica Intersecto já operante para se tornar as bases lógicas $1 - I/Total$.
@@ -126,6 +137,7 @@ Realiza conversões algébricas de estruturas aglomeradas do objeto `ListaCompra
 Orquestrador macro gerenciando IO streams locais.
 
 #### Função: `exibirProdutosDoCliente`
+
 - **Assinatura**: `static void exibirProdutosDoCliente(const ListaCompras *compras, const char *codigoCliente)`
 - **Operação Principal**: Rotina varredora auxiliar (static=enclausurada apenas nesta listagem cpp não-pública a headers), ela converte os códigos String pra id_int indexador e localiza se aquele ID inserido visualizou/consumiu aquele vetor de IDs dos seus produtos.
 - **Parâmetros**:
@@ -133,4 +145,5 @@ Orquestrador macro gerenciando IO streams locais.
   - `codigoCliente`: (`const char *`) Buffer referenciado via ponteiro pois não necessita alocar os seus chars na memória, só compará-los iterativamente por hashes para agilidade em cima da query fornecida estritamente num `scanf`.
 
 #### Função: `main`
+
 - Processo que amarra a ponte `exibirProdutosDoCliente`, recolhe de fato as I/Os do buffer `stdin` com `scanf`, gerencia local as criações orquestradas `calcularSimilaridade` e imprime através de tabulações espaçadas limpas cruzadas um painel da nota transposta $S_{i,j}$ para o cliente, desativando os contadores dinâmicos através de `matrixFree(I)` e `matrixFreeDouble(S)` ao sair da run-time principal (Fim).
