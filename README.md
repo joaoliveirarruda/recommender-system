@@ -1,10 +1,13 @@
-# Sistema de Recomendação - Similaridade de Jaccard
 
-Este projeto implementa um sistema de recomendação baseado na **Similaridade de Jaccard**, analisando a interseção de compras entre clientes.
+# Sistema de Recomendação - Distância de Jaccard
+
+Este projeto implementa um sistema de recomendação baseado na **Distância de Jaccard**, utilizando o histórico de compras dos clientes para medir o grau de diferença entre seus perfis de consumo.
+
+A proposta do sistema é transformar os registros de compras em estruturas numéricas que permitam comparar clientes de forma eficiente. Para isso, o programa identifica os produtos comprados por cada cliente, calcula a interseção entre esses conjuntos e, em seguida, aplica a métrica de Jaccard para obter uma matriz de distâncias entre os clientes analisados.
 
 ## Fluxo de Execução (Mermaid.js)
 
-O diagrama a seguir detalha o fluxo de execução do sistema, desde a leitura do disco (`.csv`) até o processamento das matrizes em memória e a exibição em tela:
+O diagrama abaixo apresenta o fluxo geral do sistema, desde a leitura do arquivo `.csv` até a construção das matrizes em memória, o cálculo da distância de Jaccard e a exibição dos resultados ao usuário.
 
 ```mermaid
 flowchart TD
@@ -17,7 +20,7 @@ flowchart TD
     F --> G[exibirProdutosDoCliente]
     G --> H[calcularSimilaridade]
 
-    subgraph sim_cpp ["similaridade.cpp — Cálculos Matriciais (Similaridade)"]
+    subgraph sim_cpp ["similaridade.cpp — Cálculos Matriciais"]
         H --> I[construirMatrizDensa]
         I --> J[calcularTransposta]
         J --> K[matrixAlloc]
@@ -27,123 +30,250 @@ flowchart TD
 
     M --> N[Retorna Matriz de Interseção]
 
-    subgraph jaccard ["Jaccard"]
+    subgraph jaccard ["Distância de Jaccard"]
         N --> O[calcularJaccard]
         O --> P["Calcula 1.0 - I/Total"]
     end
 
-    P --> Q["Imprime Similaridade de Jaccard 3x3"]
+    P --> Q["Imprime Distância de Jaccard 3x3"]
     Q --> R[matrixFree e matrixFreeDouble]
     R --> S[Fim do Programa]
 ```
 
 ## Detalhamento das Funções por Arquivo
 
-Abaixo encontra-se o detalhamento minucioso de toda a estrutura e funções, abordando assinaturas completas, tipos de parâmetros, uso de ponteiros explicativo e funcionamento de memória interna.
+A seguir, apresenta-se a descrição detalhada da estrutura do projeto e de suas principais funções, incluindo assinaturas, parâmetros, uso de ponteiros e estratégia de alocação de memória.
 
 ---
 
 ### 1. `listaCompras.hpp` / `listaCompras.cpp`
 
-Este módulo é encarregado de extrair as informações base do `.csv` efetuando processamento primitivo das strings e indexação na memória.
+Esse módulo é responsável por ler o arquivo `.csv`, interpretar seus dados e organizá-los em estruturas de memória adequadas para o processamento posterior.
 
 #### struct `ListaCompras`
 
-Uma estrutura que consolida toda a base lida:
+A estrutura `ListaCompras` concentra toda a base de dados carregada do arquivo e funciona como núcleo de armazenamento do sistema.
 
-- **`clientesCodigoBase`**: `std::vector<std::string>` - Armazena os códigos originais em formato de `string` pela ordem inserida. O índice da inserção representa dinamicamente o seu ID de cliente (inteiro).
-- **`clienteIndiceInterno`**: `std::map<std::string, int>` - Relacionamento tipo chave-valor convertendo o código Original String do CSV na ID numérica do cliente no sistema.
-- **`produtosNomeDescritivo`**: `std::vector<std::string>` - Mesmo princípio do vetor acima, porém para os nomes literais dos produtos; índice do vetor virando seu respectivo identificador ID numérico interno.
-- **`produtoIndiceInterno`**: `std::map<std::string, int>` - Chave de busca em Hash Map transformando String nome de um item e indicando qual int ID pertence à ele.
-- **`historicoComprasPorCliente`**: `std::vector<std::vector<int>>` - Matriz condensada que armazena os IDs dos produtos por IDs dos clientes.
+- **`clientesCodigoBase`**: `std::vector<std::string>`  
+  Armazena os códigos originais dos clientes na ordem em que são encontrados no arquivo. O índice de cada posição nesse vetor passa a funcionar como o identificador interno numérico do cliente.
+
+- **`clienteIndiceInterno`**: `std::map<std::string, int>`  
+  Mapeia o código textual do cliente, lido do `.csv`, para seu respectivo ID interno inteiro. Isso permite localizar rapidamente um cliente a partir de seu código original.
+
+- **`produtosNomeDescritivo`**: `std::vector<std::string>`  
+  Armazena os nomes dos produtos em ordem de inserção. Assim como no caso dos clientes, o índice de cada posição no vetor representa o ID interno do produto.
+
+- **`produtoIndiceInterno`**: `std::map<std::string, int>`  
+  Faz a associação entre o nome textual de um produto e seu identificador inteiro interno, facilitando o acesso rápido durante a leitura e o processamento.
+
+- **`historicoComprasPorCliente`**: `std::vector<std::vector<int>>`  
+  Armazena, para cada cliente, a lista dos IDs dos produtos comprados. Na prática, essa estrutura representa o histórico de compras já convertido para um formato mais apropriado ao cálculo matricial.
 
 #### Função: `carregarCompras`
 
-A primeira função do fluxo do programa a ser invocada.
+É a primeira função relevante do fluxo do programa, pois faz a leitura inicial da base de dados.
 
 - **Assinatura**: `ListaCompras carregarCompras(const char *caminhoArquivo)`
+
 - **Parâmetros**:
-  - `caminhoArquivo`: (`const char *`) Ponteiro para o endereço de memória de caracteres constantes (strings estilo C). **Por que ser ponteiro?** É passado como ponteiro em substituição a `std::string` para acoplar nativamente sua variável ao método primitivo de leitura C-like `fopen(caminhoArquivo)`. Como é `const`, se assegura que esta string referida não poderá sofrer escritas colaterais da manipulação acidental durante a extração de metadados.
-- **Retorno**: (`ListaCompras`) Um object struct instanciado contendo vetores e mapeamentos de IDs preenchido inteiramente. Ele não retorna ponteiro pois o objeto base se ancora perfeitamente pelo mecanismo RVO (Return Value Optimization) impedindo replicações brutas no contexto do pai.
+  - `caminhoArquivo`: (`const char *`)  
+    Ponteiro para uma sequência de caracteres em estilo C que representa o caminho do arquivo de entrada. O uso de `const char *` é conveniente porque a função de abertura de arquivos em C, como `fopen`, trabalha naturalmente com esse formato. O modificador `const` garante que o conteúdo da string não será alterado durante a execução da função.
+
+- **Retorno**:
+  - (`ListaCompras`)  
+    Retorna um objeto do tipo `ListaCompras` completamente preenchido com os dados extraídos do arquivo. O retorno é feito por valor, o que é aceitável em C++ moderno graças a otimizações como RVO (*Return Value Optimization*), reduzindo ou eliminando cópias desnecessárias.
 
 ---
 
 ### 2. `similaridade.hpp` / `similaridade.cpp`
 
-Realiza conversões algébricas de estruturas aglomeradas do objeto `ListaCompras` em matrizes bidimensionais puras nativas em C via Heap da memória RAM, sem orientação a objeto extra, providenciando as bibliotecas vitais `<stdio.h>` e `<stdlib.h>`.
+Esse módulo concentra as operações matemáticas do sistema. Ele recebe os dados organizados em `ListaCompras`, converte essas informações em matrizes densas e executa os cálculos necessários para encontrar a interseção entre os conjuntos de compras e, depois, a distância de Jaccard.
+
+Apesar do nome do arquivo e de algumas funções remeterem a “similaridade”, o resultado final utilizado pelo sistema é a **distância de Jaccard**, isto é, uma medida de dissimilaridade entre os conjuntos comparados.
 
 #### Funções: `matrixAlloc` / `matrixAllocDouble`
 
-- **Assinatura**: `int** matrixAlloc(int linhas, int colunas)` / `double** matrixAllocDouble(...)`
-- **Operação Principal**: Usando `malloc` combinada de repetição preenchedora e `calloc` com zeros absolutos geram as matrizes no bloco heap dinâmico da memória.
+Essas funções são responsáveis pela criação dinâmica de matrizes na heap.
+
+- **Assinaturas**:  
+  `int** matrixAlloc(int linhas, int colunas)`  
+  `double** matrixAllocDouble(int linhas, int colunas)`
+
+- **Operação principal**:  
+  Criam, respectivamente, matrizes de inteiros e de números de ponto flutuante. A alocação é feita dinamicamente na heap, o que permite trabalhar com dimensões conhecidas apenas em tempo de execução.
+
 - **Parâmetros**:
-  - `linhas` e `colunas`: (`int`) - **Tipo primário int repassado por valor.** São meramente cópias quantitativas pequenas iterativas de metainformação de laços temporários (for). Escritas acidentais nas variáveis ali dentro não prejudicam as matrizes principais do `main`.
-- **Retorno**: (`int**` / `double**`) - Ponteiro referenciando para um outro ponteiro interno (`**`). **Por que isso ocorre?** Arrays multidimensionais em C que não têm seus tamanhos de "linhas" e "colunas" declarados em escopo e tempo de compilação precisam ser dinâmicos. `int**` significa que a variável central guarda endereços de memórias num *array mestre de ponteiros* onde cada endereço local dessa linha apontará para novo array contendo os "Inteiros" da tal coluna na lateral.
+  - `linhas` e `colunas`: (`int`)  
+    Representam as dimensões da matriz a ser criada. São passados por valor porque são apenas valores escalares pequenos, usados para controlar a alocação e os laços de preenchimento.
+
+- **Retorno**:
+  - (`int**` ou `double**`)  
+    Retornam um ponteiro para ponteiro, que representa uma matriz alocada dinamicamente por linhas. Em outras palavras, há um vetor principal de ponteiros, e cada ponteiro desse vetor aponta para uma linha da matriz.
+
+Esse modelo é comum em C quando se deseja criar matrizes com tamanho variável em tempo de execução.
 
 #### Funções: `matrixFree` / `matrixFreeDouble`
 
-- **Assinatura**: `void matrixFree(int **matriz, int linhas)`
-- **Operação Principal**: Função essencial para blindar a perda de memória e vazamento (Leak).
+Essas funções liberam a memória previamente alocada para as matrizes.
+
+- **Assinatura**: `void matrixFree(int **matriz, int linhas)`  
+  A função equivalente para `double` segue a mesma lógica.
+
+- **Operação principal**:  
+  Percorrem as linhas da matriz, liberando primeiro cada bloco correspondente a uma linha e, ao final, liberando o vetor principal de ponteiros.
+
 - **Parâmetros**:
-  - `matriz`: (`int**` ou `double**`) - Recebe obrigatoriamente um ponteiro referenciado diretamente no nó-pai da memória estendida para soltar as amarrações do malloc.
-  - `linhas`: (`int`) - Cópia repassada (por valor) de laço primário.
+  - `matriz`: (`int**` ou `double**`)  
+    Ponteiro para a matriz dinâmica que deverá ser desalocada.
+  - `linhas`: (`int`)  
+    Número de linhas da matriz, necessário para que a função saiba quantos blocos precisa liberar.
+
+Essas funções são fundamentais para evitar vazamentos de memória ao final do processamento.
 
 #### Função: `construirMatrizDensa`
 
+Converte a estrutura lógica de compras em uma matriz binária cliente-produto.
+
 - **Assinatura**: `int** construirMatrizDensa(ListaCompras *compras, int nClientes, int nProdutos)`
-- **Operação Principal**: Gera matriz pura iterada da struct para calcular $A_{m \times n}$.
+
+- **Operação principal**:  
+  Gera a matriz \(A_{m \times n}\), em que cada linha representa um cliente e cada coluna representa um produto. O valor armazenado em cada posição indica se aquele cliente comprou ou não o produto correspondente.
+
 - **Parâmetros**:
-  - `compras`: (`ListaCompras *`) - Uso intensivo de **ponteiro sem conversões const**. **Por que ponteiro?** Como `ListaCompras` tem milhões de hashes, structs em C passadas por valor como função seriam clonadas por cópia e gerariam excesso de alocação ram desnecessárias a fundo.
-  - `nClientes`, `nProdutos`: (`int`) Valores base passados por cópia em variáveis limpas.
-- **Retorno**: (`int**`) Ponteiro matricial instanciado da Matriz $A$.
+  - `compras`: (`ListaCompras *`)  
+    Ponteiro para a estrutura principal do sistema. O uso de ponteiro evita a cópia completa da estrutura, o que seria custoso, já que ela contém vetores, mapas e histórico de compras.
+  - `nClientes`, `nProdutos`: (`int`)  
+    Dimensões necessárias para a criação da matriz.
+
+- **Retorno**:
+  - (`int**`)  
+    Retorna a matriz densa \(A\), pronta para ser utilizada nos cálculos posteriores.
 
 #### Função: `calcularTransposta`
 
+Produz a transposta da matriz de compras.
+
 - **Assinatura**: `int** calcularTransposta(int **A, int nClientes, int nProdutos)`
+
+- **Operação principal**:  
+  A partir da matriz original \(A\), constrói uma nova matriz \(A^T\), invertendo linhas e colunas. Essa etapa é importante porque a multiplicação entre \(A\) e \(A^T\) permite medir a interseção entre os conjuntos de compras dos clientes.
+
 - **Parâmetros**:
-  - `A`: (`int**`) Referencia na memória a versão da matriz pura $A$ original; a ser inspecionada (não clonada).
-  - Variáveis de controle for: Dimensões limitadoras por base valor numérico escalar.
-- **Retorno**: (`int**`) Cria submatriz alocando na heap uma nova e limpa da qual se guarda $A^T$.
+  - `A`: (`int**`)  
+    Matriz original de compras.
+  - `nClientes`, `nProdutos`: (`int`)  
+    Dimensões da matriz original.
+
+- **Retorno**:
+  - (`int**`)  
+    Retorna uma nova matriz alocada dinamicamente contendo a transposta de `A`.
 
 #### Função: `matrixMult`
 
+Executa a multiplicação matricial principal do sistema.
+
 - **Assinatura**: `void matrixMult(int **A, int **AT, int **I, int nClientes, int nProdutos)`
-- **Operação Principal**: Pela algebra subscrita: $I = A \times A^T$.
+
+- **Operação principal**:  
+  Calcula a matriz de interseção por meio da operação:
+
+  \(I = A \times A^T\)
+
+  O resultado `I` indica, para cada par de clientes, quantos produtos eles têm em comum.
+
 - **Parâmetros**:
-  - `A`, `AT`, `I`: (`int**`) Ponteiros duplos repassados em cascata a uma região alocadora de arrays instanciados previamente. A destinação não é por return final; **ela injeta em `I` perfeitamente em operação `in-place`**, ou seja, os valores das linhas multiplicadas preenchem as gavetas do bloco alocado pelo invocador lá no chamador primário, isentando de alocar ainda mais tráfego e memórias lixos.
-  - Parametrizadores dimensionados escaláveis `int`.
+  - `A`, `AT`, `I`: (`int**`)  
+    Matrizes envolvidas na operação. A matriz `I` já deve estar previamente alocada, pois a função escreve diretamente em suas posições.
+  - `nClientes`, `nProdutos`: (`int`)  
+    Dimensões necessárias para controlar os laços da multiplicação.
+
+A escrita em `I` ocorre **in-place**, isto é, a função preenche uma estrutura já criada pelo chamador. Isso evita criar novas matrizes desnecessárias durante a multiplicação e reduz o custo de memória.
 
 #### Função: `calcularSimilaridade`
 
+Apesar do nome, essa função atua como coordenadora do cálculo da matriz de interseção, que depois servirá de base para a distância de Jaccard.
+
 - **Assinatura**: `int** calcularSimilaridade(ListaCompras *compras, int *nClientes_out)`
-- **Operação Principal**: A "Maestrina" que orquestra tudo isso de transpostas em modo limpo (gerando-as já as limpando localmente com matrixFree para poupar o main).
+
+- **Operação principal**:  
+  Essa função organiza todo o processo intermediário de cálculo matricial. Em linhas gerais, ela:
+
+  - determina as dimensões relevantes do problema;
+  - constrói a matriz densa de compras;
+  - calcula sua transposta;
+  - aloca a matriz de interseção;
+  - realiza a multiplicação matricial;
+  - libera as matrizes intermediárias que não serão mais usadas;
+  - retorna a matriz final de interseção.
+
 - **Parâmetros**:
-  - `compras`: (`ListaCompras *`) Novamente por ponteiro por otimização extrema a estrutura macro do projeto.
-  - `nClientes_out`: (`int *`) Ponteiro do Tipo Numérico Base. **Por que um ponteiro de int?** Sabendo que a função só permite um tipo único de return oficial (e a Matrix já usurpa esse espaço retornado como `int**`), é obrigatório o Main descobrir quantos laços terá que iterar mais tarde para apagar esse lixo inteiro; então forçadamente ele envia o ENDEREÇO NUMÉRICO de si mesmo `&nCliente_Out`, de forma que quando esta função de `Similaridade` atualiza a variável através do espaço subreferenciado que pertence a Main nativamente, escrevendo local permanentemente.
-- **Retorno**: (`int**`) Matriz de Interseção já fechada e desanexada I.
+  - `compras`: (`ListaCompras *`)  
+    Ponteiro para a estrutura principal com os dados de entrada.
+  - `nClientes_out`: (`int *`)  
+    Ponteiro para uma variável inteira do chamador. Ele é usado para que a função possa “devolver” ao `main` a quantidade de clientes processados, já que o valor de retorno principal da função é a matriz `int**`.
+
+- **Retorno**:
+  - (`int**`)  
+    Retorna a matriz `I` de interseção entre clientes.
+
+O uso de `int *nClientes_out` é uma técnica clássica em C e C++ para retornar uma informação adicional quando o retorno principal da função já está sendo utilizado por outro dado mais complexo.
 
 #### Função: `calcularJaccard`
 
+Calcula a matriz final de distâncias entre os clientes.
+
 - **Assinatura**: `double** calcularJaccard(int **I, int nClientes)`
+
+- **Operação principal**:  
+  Recebe a matriz de interseção e, a partir dela, calcula a distância de Jaccard entre cada par de clientes. Como a distância de Jaccard é dada por \(1 - \frac{|A \cap B|}{|A \cup B|}\), o resultado expressa o quanto dois clientes diferem entre si [web:31][web:21].
+
 - **Parâmetros**:
-  - `I`: (`int**`) Referência direta do ponteiro da matriz de matemática básica Intersecto já operante para se tornar as bases lógicas $1 - I/Total$.
-  - `nClientes`: (`int`) Escala de for passada como cópia-valor.
-- **Retorno**: (`double**`) Transmutação gerando outra Matriz Dinâmica Dupla de distanciamento flutuante decimal (0.0 até 1.0).
+  - `I`: (`int**`)  
+    Matriz de interseção entre os clientes.
+  - `nClientes`: (`int`)  
+    Quantidade de clientes considerada no cálculo.
+
+- **Retorno**:
+  - (`double**`)  
+    Retorna uma matriz de números reais com valores entre 0.0 e 1.0, em que:
+    - valores próximos de **0** indicam clientes com perfis de compra muito parecidos;
+    - valores próximos de **1** indicam clientes com perfis de compra muito diferentes.
 
 ---
 
 ### 3. `main.cpp`
 
-Orquestrador macro gerenciando IO streams locais.
+Esse arquivo atua como o ponto central de execução do programa. Ele coordena a leitura dos dados, a interação com o usuário, a chamada das rotinas de cálculo e a liberação da memória utilizada.
 
 #### Função: `exibirProdutosDoCliente`
 
+Mostra na tela os produtos associados a um cliente informado pelo usuário.
+
 - **Assinatura**: `static void exibirProdutosDoCliente(const ListaCompras *compras, const char *codigoCliente)`
-- **Operação Principal**: Rotina varredora auxiliar (static=enclausurada apenas nesta listagem cpp não-pública a headers), ela converte os códigos String pra id_int indexador e localiza se aquele ID inserido visualizou/consumiu aquele vetor de IDs dos seus produtos.
+
+- **Operação principal**:  
+  A função recebe o código de um cliente, localiza seu ID interno e percorre o histórico de compras correspondente para exibir os produtos associados a esse cliente.
+
 - **Parâmetros**:
-  - `compras`: (`const ListaCompras *`) O ponteiro ultra-leve sem cópia pra acesso RAM de raiz rápida. **Por que const?** Para certificar puramente de maneira compilável que não será de nenhum viés de escrita capaz de sobrescrever registros do Cliente por acidente, o qualificador restringe essa função a operações seguras em `Read-Only` na struct.
-  - `codigoCliente`: (`const char *`) Buffer referenciado via ponteiro pois não necessita alocar os seus chars na memória, só compará-los iterativamente por hashes para agilidade em cima da query fornecida estritamente num `scanf`.
+  - `compras`: (`const ListaCompras *`)  
+    Ponteiro para a estrutura de dados principal. O uso de `const` indica que a função apenas consulta os dados, sem modificá-los.
+  - `codigoCliente`: (`const char *`)  
+    Código textual do cliente, recebido para consulta.
+
+O uso de `static` indica que essa função é de uso interno ao arquivo `main.cpp`, não sendo exposta a outros módulos do projeto.
 
 #### Função: `main`
 
-- Processo que amarra a ponte `exibirProdutosDoCliente`, recolhe de fato as I/Os do buffer `stdin` com `scanf`, gerencia local as criações orquestradas `calcularSimilaridade` e imprime através de tabulações espaçadas limpas cruzadas um painel da nota transposta $S_{i,j}$ para o cliente, desativando os contadores dinâmicos através de `matrixFree(I)` e `matrixFreeDouble(S)` ao sair da run-time principal (Fim).
+A função `main` é a responsável por encadear todas as etapas da aplicação.
+
+De forma geral, ela executa o seguinte fluxo:
+
+1. chama `carregarCompras` para ler o arquivo e montar a estrutura principal;
+2. solicita ao usuário os códigos de três clientes;
+3. exibe os produtos comprados por cada cliente informado;
+4. chama `calcularSimilaridade` para gerar a matriz de interseção;
+5. chama `calcularJaccard` para obter a matriz de distância de Jaccard;
+6. imprime a matriz resultante em formato tabular;
+7. libera toda a memória dinâmica alocada durante a execução com `matrixFree` e `matrixFreeDouble`.
+
+Assim, o `main` funciona como orquestrador do programa, conectando entrada, processamento, saída e gerenciamento de memória.
