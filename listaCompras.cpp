@@ -1,76 +1,62 @@
+#include "listaCompras.hpp"
 #include <stdio.h>
 #include <stdlib.h>
-#include <string>
-#include <vector>
-#include <map>
-using namespace std;
 
+ListaCompras carregarCompras(const char *caminhoArquivo) {
+  FILE *arquivo;
+  ListaCompras compras;
 
-typedef struct {
-    vector<string> codigosClientes;
-    map<string, int> posicaoCodigoCliente;
-    vector<string> nomesProdutos;
-    map<string, int> posicaoCodigoProduto;
-    vector<vector<int>> comprasPorCliente;
-} ListaCompras;
+  arquivo = fopen(caminhoArquivo, "r");
 
+  if (arquivo == NULL) {
+    printf("Erro ao abrir arquivo\n");
+    return compras;
+  }
 
-int main() {
-    FILE *arquivo;
-    ListaCompras compras;
+  printf("Leitura dos dados do arquivo:\n");
+  printf("---------------------------------------\n");
 
-    arquivo = fopen("./data/dados_venda_cluster_0.csv", "r");
+  char codClient[50];
+  char codProduto[50];
+  char nomeProduto[50];
 
-    if (arquivo == NULL) {
-        printf("Erro ao abrir arquivo");
-        return 1;
-    }
-
-    printf("Leitura dos dados do arquivo:\n");
-    printf("---------------------------------------\n");
-
-    char codClient[50];
-    char codProduto[50];
-    char nomeProduto[50];
-
-    char cabecalho[200];
-    if (fgets(cabecalho, sizeof(cabecalho), arquivo) == NULL) { 
-        printf("Arquivo vazio\n");
-        fclose(arquivo);
-        return 1;
-    }
-
-    while (fscanf(arquivo, " %*[^,],%49[^,],%49[^,],%49[^\n]",
-                codClient,
-                codProduto,
-                nomeProduto) == 3) {    
-                    string cliente = codClient;
-                    string produto = codProduto;
-                    string nome = nomeProduto;
-                    
-                    int cliente_idx;
-                    if (compras.posicaoCodigoCliente.find(cliente) !=
-                    compras.posicaoCodigoCliente.end()) {
-                        cliente_idx = compras.posicaoCodigoCliente[cliente];
-                    } else{
-                        cliente_idx = compras.posicaoCodigoCliente[cliente];
-                        compras.codigosClientes.push_back(cliente);
-                        compras.posicaoCodigoCliente[cliente] = cliente_idx;
-                        compras.comprasPorCliente.push_back(vector<int>());
-                    }
-
-                    int produto_idx;
-                    if (compras.posicaoCodigoProduto.find(produto) != compras.posicaoCodigoProduto.end()) {
-                    produto_idx = compras.posicaoCodigoProduto[produto];
-                    }  else {
-                    produto_idx = compras.nomesProdutos.size();
-                    compras.nomesProdutos.push_back(nome);
-                    compras.posicaoCodigoProduto[produto] = produto_idx;
-                    }
-                    
-                    compras.comprasPorCliente[cliente_idx].push_back(produto_idx);
-    }
+  char cabecalho[200];
+  if (fgets(cabecalho, sizeof(cabecalho), arquivo) == NULL) {
+    printf("Arquivo vazio\n");
     fclose(arquivo);
+    return compras;
+  }
 
-    return 0;
+  while (fscanf(arquivo, " %*[^,],%49[^,],%49[^,],%49[^\n]", codClient,
+                codProduto, nomeProduto) == 3) {
+    std::string cliente = codClient;
+    std::string produto = codProduto;
+    std::string nome = nomeProduto;
+
+    int cliente_idx;
+    if (compras.clienteIndiceInterno.find(cliente) !=
+        compras.clienteIndiceInterno.end()) {
+      cliente_idx = compras.clienteIndiceInterno[cliente];
+    } else {
+      cliente_idx = compras.clientesCodigoBase.size();
+      compras.clientesCodigoBase.push_back(cliente);
+      compras.clienteIndiceInterno[cliente] = cliente_idx;
+      compras.historicoComprasPorCliente.push_back(std::vector<int>());
+    }
+
+    int produto_idx;
+    if (compras.produtoIndiceInterno.find(produto) !=
+        compras.produtoIndiceInterno.end()) {
+      produto_idx = compras.produtoIndiceInterno[produto];
+    } else {
+      produto_idx = compras.produtosNomeDescritivo.size();
+      compras.produtosNomeDescritivo.push_back(nome);
+      compras.produtoIndiceInterno[produto] = produto_idx;
+    }
+
+    compras.historicoComprasPorCliente[cliente_idx].push_back(produto_idx);
+  }
+  fclose(arquivo);
+
+  return compras;
 }

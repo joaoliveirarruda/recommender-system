@@ -13,6 +13,6 @@ struct ListaCompras {
     std::vector<std::vector<int>> historicoComprasPorCliente;
 };
 
-ListaCompras carregarCompras(const std::string& caminhoArquivo);
+ListaCompras carregarCompras(const char *caminhoArquivo);
 
 #endif // LISTACOMPRAS_HPP
