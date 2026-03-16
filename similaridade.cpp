@@ -88,12 +88,53 @@ int** calcularSimilaridade(ListaCompras *compras, int *nClientes_out) {
 
     int **A            = construirMatrizDensa(compras, nClientes, nProdutos);
     int **AT           = calcularTransposta(A, nClientes, nProdutos);
-    int **similaridade = matrixAlloc(nClientes, nClientes);
+    int **intersecao   = matrixAlloc(nClientes, nClientes);
 
-    matrixMult(A, AT, similaridade, nClientes, nProdutos);
+    matrixMult(A, AT, intersecao, nClientes, nProdutos);
 
     matrixFree(A, nClientes);
     matrixFree(AT, nProdutos);
 
-    return similaridade;
+    return intersecao;
+}
+
+
+/* Aloca uma matriz 2D de double (linhas x colunas), inicializada com 0 */
+double** matrixAllocDouble(int linhas, int colunas) {
+    double **matriz = (double **)malloc(linhas * sizeof(double *));
+    for (int i = 0; i < linhas; i++) {
+        matriz[i] = (double *)calloc(colunas, sizeof(double));
+    }
+    return matriz;
+}
+
+
+/* Libera a memoria de uma matriz 2D de double */
+void matrixFreeDouble(double **matriz, int linhas) {
+    for (int i = 0; i < linhas; i++) {
+        free(matriz[i]);
+    }
+    free(matriz);
+}
+
+
+/*
+ * Calcula a matriz de similaridade de Jaccard S a partir da matriz de intersecao I.
+ * S[i][j] = 1 - I[i][j] / I[i][i]
+ * onde I[i][i] e o total de produtos comprados pelo cliente i (a diagonal).
+ * O chamador e responsavel por liberar a memoria com matrixFreeDouble().
+ */
+double** calcularJaccard(int **I, int nClientes) {
+    double **S = matrixAllocDouble(nClientes, nClientes);
+
+    for (int i = 0; i < nClientes; i++) {
+        for (int j = 0; j < nClientes; j++) {
+            if (I[i][i] == 0)
+                S[i][j] = 1.0; /* cliente sem compras: maxima distancia */
+            else
+                S[i][j] = 1.0 - (double)I[i][j] / (double)I[i][i];
+        }
+    }
+
+    return S;
 }
