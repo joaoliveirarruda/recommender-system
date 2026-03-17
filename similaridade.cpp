@@ -65,7 +65,6 @@ int** calcularTransposta(int **A, int nClientes, int nProdutos) {
 void matrixMult(int **A, int **AT, int **I, int nClientes, int nProdutos) {
     for (int i = 0; i < nClientes; i++) {
         for (int j = 0; j < nClientes; j++) {
-            I[i][j] = 0;
             for (int k = 0; k < nProdutos; k++) {
                 I[i][j] += A[i][k] * AT[k][j];
             }
