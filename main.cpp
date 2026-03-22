@@ -1,30 +1,11 @@
 #include <stdio.h>
+#include <ctime>
 #include "listaCompras.hpp"
 #include "similaridade.hpp"
-
-static void exibirProdutosDoCliente(const ListaCompras *compras, const char *codigoCliente) {
-    std::map<std::string, int>::const_iterator it =
-        compras->clienteIndiceInterno.find(std::string(codigoCliente));
-
-    if (it == compras->clienteIndiceInterno.end()) {
-        printf("  Cliente '%s' nao encontrado na base.\n", codigoCliente);
-        return;
-    }
-
-    int idx = it->second;
-    int qtd = (int)compras->historicoComprasPorCliente[idx].size();
-
-    printf("  Produtos comprados por '%s' (%d produto(s)):\n", codigoCliente, qtd);
-    for (int k = 0; k < qtd; k++) {
-        int produto_idx = compras->historicoComprasPorCliente[idx][k];
-        printf("    - %s\n", compras->produtosNomeDescritivo[produto_idx].c_str());
-    }
-}
-
+#include "recomendacao.hpp"
 
 int main() {
     const char *caminho = "./data/dados_venda_cluster_0.csv";
-
     ListaCompras compras = carregarCompras(caminho);
 
     if (compras.clientesCodigoBase.empty()) {
@@ -32,48 +13,63 @@ int main() {
         return 1;
     }
 
-    printf("\nTotal de clientes: %d\n", (int)compras.clientesCodigoBase.size());
-    printf("Total de produtos: %d\n\n", (int)compras.produtosNomeDescritivo.size());
-
-    char codigo[50];
-    int indices[3] = {-1, -1, -1};
-
-    printf("Digite os codigos de 3 clientes (um por linha):\n");
-    for (int i = 0; i < 3; i++) {
-        printf("  Cliente %d: ", i + 1);
-        if (scanf(" %49s", codigo) != 1) {
-            printf("Erro na leitura.\n");
-            return 1;
-        }
-        printf("\n");
-        exibirProdutosDoCliente(&compras, codigo);
-        printf("\n");
-
-        std::map<std::string, int>::const_iterator it =
-            compras.clienteIndiceInterno.find(std::string(codigo));
-        if (it != compras.clienteIndiceInterno.end())
-            indices[i] = it->second;
-    }
-
+    int nProdutos = (int)compras.produtosNomeDescritivo.size();
     int nClientes = 0;
-    int    **I = calcularSimilaridade(&compras, &nClientes);
-    double **S = calcularJaccard(I, nClientes);
+    
+    printf("\nTotal de clientes: %d\n", (int)compras.clientesCodigoBase.size());
+    printf("Total de produtos: %d\n\n", nProdutos);
 
-    printf("---------------------------------------\n");
-    printf("Similaridade de Jaccard entre os 3 clientes:\n\n");
-    printf("        C1     C2     C3\n");
+    printf("--- COMPARATIVO DE PERFORMANCE ---\n");
+    
+    // Algoritmo Padrao
+    clock_t inicio_padrao = clock();
+    int **I_padrao = calcularSimilaridade(&compras, &nClientes, false);
+    clock_t fim_padrao = clock();
+    double tempo_padrao = double(fim_padrao - inicio_padrao) / CLOCKS_PER_SEC;
+    matrixFree(I_padrao, nClientes);
+    
+    // Algoritmo Otimizado
+    clock_t inicio_otimizado = clock();
+    int **I_otimizado = calcularSimilaridade(&compras, &nClientes, true);
+    clock_t fim_otimizado = clock();
+    double tempo_otimizado = double(fim_otimizado - inicio_otimizado) / CLOCKS_PER_SEC;
+    
+    printf("Tempo Algoritmo Padrao    (O(N^2 * M) + O(N*M)): %.4f s\n", tempo_padrao);
+    printf("Tempo Algoritmo Otimizado (Triangulo Superior) : %.4f s\n\n", tempo_otimizado);
+
+    double **S = calcularJaccard(I_otimizado, nClientes);
+
+    printf("--- SISTEMA DE RECOMENDACAO ---\n");
+    char codigo[50];
+    int k = 5; // Quantidade padrao de produtos pra recomendar
+
+    printf("Digite os codigos de 3 clientes para gerar recomendacoes:\n");
     for (int i = 0; i < 3; i++) {
-        printf("C%d  ", i + 1);
-        for (int j = 0; j < 3; j++) {
-            if (indices[i] < 0 || indices[j] < 0)
-                printf("%7s", "-");
-            else
-                printf("%7.2f", S[indices[i]][indices[j]]);
+        printf("\nCliente %d: ", i + 1);
+        if (scanf(" %49s", codigo) != 1) return 1;
+
+        std::map<std::string, int>::const_iterator it = compras.clienteIndiceInterno.find(std::string(codigo));
+        
+        if (it == compras.clienteIndiceInterno.end()) {
+            printf("Cliente '%s' nao encontrado.\n", codigo);
+            continue;
         }
-        printf("\n");
+
+        int idx_cliente = it->second;
+        std::vector<ProdutoRecomendado> recs = recomendarProdutos(idx_cliente, k, &compras, S, nClientes, nProdutos);
+
+        printf("Top %d recomendacoes para o cliente '%s':\n", k, codigo);
+        if (recs.empty()) {
+            printf("  Nao ha dados suficientes para recomendar produtos a este cliente.\n");
+        } 
+        else {
+            for (const auto &r : recs) {
+                printf("  [Score: %f] - %s\n", r.score, r.nome.c_str());
+            }
+        }
     }
 
-    matrixFree(I, nClientes);
+    matrixFree(I_otimizado, nClientes);
     matrixFreeDouble(S, nClientes);
 
     return 0;

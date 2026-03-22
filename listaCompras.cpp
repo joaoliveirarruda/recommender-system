@@ -4,7 +4,7 @@
 
 ListaCompras carregarCompras(const char *caminhoArquivo) {
   FILE *arquivo;
-  ListaCompras compras;
+  ListaCompras compras{}; //garante que se o struct tiver algum tipo primitivo de C, que eles sejam zerados também.
 
   arquivo = fopen(caminhoArquivo, "r");
 

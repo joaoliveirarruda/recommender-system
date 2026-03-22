@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-
 /* Aloca uma matriz 2D de inteiros (linhas x colunas), inicializada com 0 */
 int** matrixAlloc(int linhas, int colunas) {
     int **matriz = (int **)malloc(linhas * sizeof(int *));
@@ -12,7 +11,6 @@ int** matrixAlloc(int linhas, int colunas) {
     return matriz;
 }
 
-
 /* Libera a memoria de uma matriz 2D previamente alocada */
 void matrixFree(int **matriz, int linhas) {
     for (int i = 0; i < linhas; i++) {
@@ -21,11 +19,7 @@ void matrixFree(int **matriz, int linhas) {
     free(matriz);
 }
 
-
-/*
- * Constroi a matriz de compras densa A[nClientes][nProdutos].
- * A[i][j] = 1 se o cliente i comprou o produto j, 0 caso contrario.
- */
+/* Constroi a matriz de compras densa A[nClientes][nProdutos]. */
 int** construirMatrizDensa(ListaCompras *compras, int nClientes, int nProdutos) {
     int **A = matrixAlloc(nClientes, nProdutos);
 
@@ -40,10 +34,7 @@ int** construirMatrizDensa(ListaCompras *compras, int nClientes, int nProdutos) 
     return A;
 }
 
-
-/*
- * Calcula a transposta AT[nProdutos][nClientes] da matriz A[nClientes][nProdutos].
- */
+/* Calcula a transposta AT[nProdutos][nClientes] */
 int** calcularTransposta(int **A, int nClientes, int nProdutos) {
     int **AT = matrixAlloc(nProdutos, nClientes);
 
@@ -56,11 +47,8 @@ int** calcularTransposta(int **A, int nClientes, int nProdutos) {
     return AT;
 }
 
-
-/*
- * Multiplica A[nClientes][nProdutos] por AT[nProdutos][nClientes],
- * armazenando o resultado em I[nClientes][nClientes].
- * I[i][j] = soma dos produtos comprados em comum entre cliente i e cliente j.
+/* * --- A FUNCAO ORIGINAL QUE ESTAVA FALTANDO ---
+ * Multiplica A por AT da forma tradicional (Fase 2)
  */
 void matrixMult(int **A, int **AT, int **I, int nClientes, int nProdutos) {
     for (int i = 0; i < nClientes; i++) {
@@ -73,31 +61,46 @@ void matrixMult(int **A, int **AT, int **I, int nClientes, int nProdutos) {
     }
 }
 
+/* * --- NOVA FUNCAO OTIMIZADA (Fase 4) ---
+ * Multiplica A por ela mesma explorando a simetria 
+ */
+void matrixMultOtimizada(int **A, int **I, int nClientes, int nProdutos) {
+    for (int i = 0; i < nClientes; i++) {
+        for (int j = i; j < nClientes; j++) { // j comeca em i
+            int soma = 0;
+            for (int k = 0; k < nProdutos; k++) {
+                soma += A[i][k] * A[j][k];
+            }
+            I[i][j] = soma;
+            I[j][i] = soma; // Aproveita a simetria 
+        }
+    }
+}
 
 /*
- * Funcao principal do modulo: recebe uma ListaCompras e retorna a matriz
- * de similaridade (nClientes x nClientes) calculada por A x AT.
- * O numero de clientes e escrito em nClientes_out para uso externo.
- * O chamador e responsavel por liberar a memoria com matrixFree().
+ * Modificada para escolher em tempo de execucao qual algoritmo de algebra linear utilizar.
  */
-int** calcularSimilaridade(ListaCompras *compras, int *nClientes_out) {
+int** calcularSimilaridade(ListaCompras *compras, int *nClientes_out, bool otimizada) {
     int nClientes = (int)compras->clientesCodigoBase.size();
     int nProdutos = (int)compras->produtosNomeDescritivo.size();
 
     *nClientes_out = nClientes;
 
     int **A            = construirMatrizDensa(compras, nClientes, nProdutos);
-    int **AT           = calcularTransposta(A, nClientes, nProdutos);
     int **intersecao   = matrixAlloc(nClientes, nClientes);
 
-    matrixMult(A, AT, intersecao, nClientes, nProdutos);
+    if (otimizada) {
+        matrixMultOtimizada(A, intersecao, nClientes, nProdutos);
+    } else {
+        int **AT = calcularTransposta(A, nClientes, nProdutos);
+        matrixMult(A, AT, intersecao, nClientes, nProdutos);
+        matrixFree(AT, nProdutos);
+    }
 
     matrixFree(A, nClientes);
-    matrixFree(AT, nProdutos);
 
     return intersecao;
 }
-
 
 /* Aloca uma matriz 2D de double (linhas x colunas), inicializada com 0 */
 double** matrixAllocDouble(int linhas, int colunas) {
@@ -108,7 +111,6 @@ double** matrixAllocDouble(int linhas, int colunas) {
     return matriz;
 }
 
-
 /* Libera a memoria de uma matriz 2D de double */
 void matrixFreeDouble(double **matriz, int linhas) {
     for (int i = 0; i < linhas; i++) {
@@ -117,13 +119,7 @@ void matrixFreeDouble(double **matriz, int linhas) {
     free(matriz);
 }
 
-
-/*
- * Calcula a matriz de similaridade de Jaccard S a partir da matriz de intersecao I.
- * S[i][j] = 1 - I[i][j] / I[i][i]
- * onde I[i][i] e o total de produtos comprados pelo cliente i (a diagonal).
- * O chamador e responsavel por liberar a memoria com matrixFreeDouble().
- */
+/* Calcula a matriz de similaridade de Jaccard S a partir da matriz de intersecao I. */
 double** calcularJaccard(int **I, int nClientes) {
     double **S = matrixAllocDouble(nClientes, nClientes);
 
