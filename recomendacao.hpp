@@ -12,10 +12,10 @@ struct ProdutoRecomendado {
 };
 
 std::vector<ProdutoRecomendado> recomendarProdutos(
-    int cliente_c, 
-    int k, 
+    int clienteAlvo, 
+    int maxRecomendacoes, 
     const ListaCompras* compras, 
-    double** S, 
+    double** distanciaJaccard, 
     int nClientes, 
     int nProdutos
 );
